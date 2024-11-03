@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Map Search</title>
+    <meta charset="utf-8" />
+
+    <!-- Add references to the Azure Maps Map control JavaScript and CSS files. -->
+    <link rel="stylesheet" href="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.css" type="text/css" />
+    <script src="https://atlas.microsoft.com/sdk/javascript/mapcontrol/3/atlas.min.js"></script>
+
+    <script>
+        function GetMap() {
+            // Instantiate a map object
+            var map = new atlas.Map("myMap", {
+                center: [24.8943264, 91.8699036], // Initial center of the map
+                zoom: 10, // Initial zoom level
+                style: 'satellite', // Use satellite style
+                authOptions: {
+                    authType: 'subscriptionKey',
+                    subscriptionKey: 'BT8ox4VyUpKBbNlBffg0IAn5AnVAG1hqoAPV3fUdA0NKDyCeeU3TJQQJ99AJACYeBjFDKA0nAAAgAZMPGSYj' // Replace with your subscription key
+                }
+            });
+
+            // Wait until the map resources are ready.
+            map.events.add('ready', function () {
+                // Create a data source and add it to the map.
+                var datasource = new atlas.source.DataSource();
+                map.sources.add(datasource);
+
+                // Add a layer for rendering point data.
+                var resultLayer = new atlas.layer.SymbolLayer(datasource, null, {
+                    iconOptions: {
+                        image: 'pin-round-darkblue',
+                        anchor: 'center',
+                        allowOverlap: true
+                    },
+                    textOptions: {
+                        anchor: "top"
+                    }
+                });
+
+                map.layers.add(resultLayer);
+
+                // Search for points of interest
+                var query = 'gasoline-station';
+                var radius = 9000;
+                var lat = 24.8943264;
+                var lon = 91.8699036;
+                var url = `https://atlas.microsoft.com/search/poi/json?api-version=1.0&query=${query}&lat=${lat}&lon=${lon}&radius=${radius}`;
+
+                fetch(url, {
+                    headers: {
+                        "Subscription-Key": map.authentication.getToken()
+                    }
+                })
+                .then((response) => response.json())
+                .then((response) => {
+                    var bounds = [];
+
+                    // Extract GeoJSON feature collection from the response and add it to the datasource
+                    var data = response.results.map((result) => {
+                        var position = [result.position.lon, result.position.lat];
+                        bounds.push(position);
+                        return new atlas.data.Feature(new atlas.data.Point(position), { ...result });
+                    });
+                    datasource.add(data);
+
+                    // Set camera to bounds to show the results
+                    map.setCamera({
+                        bounds: new atlas.data.BoundingBox.fromLatLngs(bounds),
+                        zoom: 10,
+                        padding: 15
+                    });
+                });
+
+                // Create a popup but leave it closed so we can update it later.
+                var popup = new atlas.Popup();
+
+                // Add a mouse over event to the result layer and display a popup when this event fires.
+                map.events.add('mouseover', resultLayer, showPopup);
+
+                function showPopup(e) {
+                    // Get the properties and coordinates of the first shape that the event occurred on.
+                    var p = e.shapes[0].getProperties();
+                    var position = e.shapes[0].getCoordinates();
+
+                    // Create HTML from properties of the selected result.
+                    var html = `
+                        <div style="padding:5px">
+                            <div><b>${p.poi.name}</b></div>
+                            <div>${p.address.freeformAddress}</div>
+                            <div>${position[1]}, ${position[0]}</div>
+                        </div>`;
+
+                    // Update the content and position of the popup.
+                    popup.setPopupOptions({
+                        content: html,
+                        position: position
+                    });
+
+                    // Open the popup.
+                    popup.open(map);
+                }
+            });
+        }
+    </script>
+
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            padding: 0;
+            margin: 0;
+        }
+
+        #myMap {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body onload="GetMap()">
+    <div id="myMap"></div>
+</body>
+</html>
